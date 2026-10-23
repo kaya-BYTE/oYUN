@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retro Arcade Games Center (Beta v3.0)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Press Start 2P', monospace, sans-serif;
+            user-select: none;
+        }
+        .arcade-shadow {
+            box-shadow: 0 8px 0 #000, 0 15px 20px rgba(0,0,0,0.3);
+        }
+        .arcade-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 4px 0 #000;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-between p-4">
+
+    <!-- Global Header & Download Section -->
+    <header class="w-full max-w-4xl flex flex-col sm:flex-row items-center justify-between bg-gray-800 border-4 border-black p-4 rounded-xl arcade-shadow mb-4 gap-4">
+        <div>
+            <h1 class="text-xl sm:text-2xl text-yellow-400 tracking-wider">RETRO ARCADE</h1>
+            <p class="text-xs text-gray-400 mt-1">Beta v3.0 - Ultimate Edition</p>
+        </div>
+        <div class="flex flex-wrap gap-2 justify-center">
+            <button onclick="downloadGameCode()" class="bg-green-600 hover:bg-green-500 text-white text-xs px-4 py-2 border-2 border-black rounded arcade-shadow arcade-btn font-bold transition">
+                📥 Oyunu İndir (.html)
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main id="app-container" class="w-full max-w-4xl flex-grow flex flex-col items-center justify-center bg-gray-800 border-4 border-black p-4 rounded-xl arcade-shadow relative overflow-hidden">
+        
+        <!-- MENU VIEW -->
+        <div id="menu-view" class="w-full flex flex-col items-center justify-center space-y-6 py-8">
+            <h2 class="text-2xl text-cyan-400 text-center mb-4">OYUN SEÇİN</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-3xl px-4">
+                <!-- Dinosaur Card -->
+                <div onclick="switchGame('dino')" class="bg-gray-700 border-4 border-black p-6 rounded-lg cursor-pointer hover:bg-gray-600 transition arcade-shadow flex flex-col items-center text-center">
+                    <div class="text-4xl mb-3">🦖</div>
+                    <h3 class="text-sm font-bold text-yellow-300 mb-2">DINO RUN</h3>
+                    <p class="text-[10px] text-gray-300">Yavaş başlangıç, kademeli hızlanma, üst skorlar ve gece/kuş modu!</p>
+                </div>
+                <!-- Cloud Card -->
+                <div onclick="switchGame('cloud')" class="bg-gray-700 border-4 border-black p-6 rounded-lg cursor-pointer hover:bg-gray-600 transition arcade-shadow flex flex-col items-center text-center">
+                    <div class="text-4xl mb-3">☁️</div>
+                    <h3 class="text-[10px] font-bold text-sky-300 mb-2">CLOUD DRIFT</h3>
+                    <p class="text-[10px] text-gray-300">Tavana hafifçe değince ölmezsin, esnek tavan fiziği!</p>
+                </div>
+                <!-- Rocket Card -->
+                <div onclick="switchGame('rocket')" class="bg-gray-700 border-4 border-black p-6 rounded-lg cursor-pointer hover:bg-gray-600 transition arcade-shadow flex flex-col items-center text-center">
+                    <div class="text-4xl mb-3">🚀</div>
+                    <h3 class="text-sm font-bold text-red-400 mb-2">SPACE COMBAT</h3>
+                    <p class="text-[10px] text-gray-300">Mermilerinle düşman mermilerini patlat, yukarı konum ve tekrar oyna özelliği!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- GAME VIEW WRAPPER -->
+        <div id="game-view" class="w-full hidden flex-col items-center">
+            <!-- Persistent In-Game Header -->
+            <div class="w-full bg-gray-900 border-2 border-black p-3 rounded mb-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <button onclick="returnToMenu()" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1 border-2 border-black rounded arcade-btn">
+                    ⬅️ Ana Menü
+                </button>
+                <div class="flex items-center gap-4">
+                    <span>Skor: <span id="current-score" class="text-yellow-400">0</span></span>
+                    <span>En Yüksek: <span id="high-score" class="text-green-400">0</span></span>
+                </div>
+                <button onclick="resetCurrentGameScore()" class="bg-yellow-600 hover:bg-yellow-500 text-black px-3 py-1 border-2 border-black rounded arcade-btn font-bold">
+                    🔄 Sıfırla
+                </button>
+            </div>
+
+            <!-- Canvas Container (positioned slightly higher) -->
+            <div id="canvas-wrapper" class="relative w-full flex justify-center bg-white border-4 border-black rounded overflow-hidden shadow-inner">
+                <canvas id="gameCanvas" width="800" height="360" class="w-full max-w-full h-auto max-h-[400px] object-contain"></canvas>
+            </div>
+            
+            <!-- Dynamic Mobile/Game Controls UI -->
+            <div id="game-controls-ui" class="mt-3 w-full flex flex-col items-center justify-center gap-2">
+                <div id="mobile-instructions" class="text-[10px] text-gray-300 text-center"></div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-4 text-center text-xs text-gray-500">
+        Retro Arcade Games Center &copy; 2026 - Tüm Hakları Saklıdır.
+    </footer>
+
+    <!-- Game Logic Scripts -->
+    <script>
+        let currentGame = null;
+        let animationFrameId = null;
+        let score = 0;
+        let highScore = { dino: 0, cloud: 0, rocket: 0 };
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function downloadGameCode() {
+            const htmlContent = document.documentElement.outerHTML;
+            const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'arcade_games_beta.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function switchGame(gameName) {
+            cancelAnimationFrame(animationFrameId);
+            currentGame = gameName;
+            score = 0;
+            document.getElementById('menu-view').classList.add('hidden');
+            document.getElementById('game-view').classList.remove('hidden');
+            document.getElementById('high-score').innerText = highScore[gameName];
+            document.getElementById('current-score').innerText = '0';
+
+            const controlUi = document.getElementById('game-controls-ui');
+            controlUi.innerHTML = '<div id="mobile-instructions" class="text-[10px] text-gray-300 text-center"></div>';
+
+            if (gameName === 'dino') initDinoGame();
+            else if (gameName === 'cloud') initCloudGame();
+            else if (gameName === 'rocket') initRocketGame();
+        }
+
+        function returnToMenu() {
+            cancelAnimationFrame(animationFrameId);
+            currentGame = null;
+            document.getElementById('game-view').classList.add('hidden');
+            document.getElementById('menu-view').classList.remove('hidden');
+        }
+
+        function resetCurrentGameScore() {
+            if (!currentGame) return;
+            score = 0;
+            highScore[currentGame] = 0;
+            document.getElementById('current-score').innerText = '0';
+            document.getElementById('high-score').innerText = '0';
+            switchGame(currentGame);
+        }
+
+        // ==================== GAME 1: DINOSAUR ====================
+        function initDinoGame() {
+            let dino = { x: 50, y: 265, w: 34, h: 44, vy: 0, gravity: 0.7, jumpForce: -11.5, grounded: true, legAnim: 0 };
+            let obstacles = [];
+            let frameCount = 0;
+            let speed = 3.2; // Slow comfortable start
+            let isNight = false;
+            let gameOver = false;
+
+            document.getElementById('mobile-instructions').innerText = "Kontroller: Zıplamak için [Boşluk], [Yukarı Ok] veya Ekrana Tıkla.";
+
+            function handleKeyDown(e) {
+                if ((e.code === 'Space' || e.code === 'ArrowUp') && dino.grounded && !gameOver) {
+                    dino.vy = dino.jumpForce;
+                    dino.grounded = false;
+                }
+                if (gameOver && e.code === 'Space') initDinoGame();
+            }
+            window.onkeydown = handleKeyDown;
+            canvas.onclick = () => {
+                if (dino.grounded && !gameOver) { dino.vy = dino.jumpForce; dino.grounded = false; }
+                if (gameOver) initDinoGame();
+            };
+
+            function update() {
+                if (gameOver) return;
+                frameCount++;
+                score = Math.floor(frameCount / 10);
+                document.getElementById('current-score').innerText = score;
+                if (score > highScore.dino) { highScore.dino = score; document.getElementById('high-score').innerText = score; }
+
+                isNight = score >= 500;
+                speed = 3.2 + (score / 350); // Very gradual acceleration
+
+                dino.vy += dino.gravity;
+                dino.y += dino.vy;
+                if (dino.y > 265) { dino.y = 265; dino.vy = 0; dino.grounded = true; }
+
+                if (dino.grounded && frameCount % 12 === 0) {
+                    dino.legAnim = dino.legAnim === 0 ? 1 : 0;
+                }
+
+                if (frameCount % Math.max(100, 180 - Math.floor(score/12)) === 0) {
+                    let type = Math.random() < 0.35 && isNight ? 'bird' : 'cactus';
+                    if (type === 'cactus') {
+                        let count = Math.floor(Math.random() * 2) + 1;
+                        obstacles.push({ x: 800, y: 270, w: 16 * count, h: 35, type: 'cactus', count: count });
+                    } else {
+                        let birdHeight = Math.random() < 0.5 ? 200 : 270;
+                        obstacles.push({ x: 800, y: birdHeight, w: 32, h: 22, type: 'bird', wingFrame: 0 });
+                    }
+                }
+
+                for (let i = obstacles.length - 1; i >= 0; i--) {
+                    obstacles[i].x -= speed;
+                    if (obstacles[i].type === 'bird' && frameCount % 15 === 0) {
+                        obstacles[i].wingFrame = obstacles[i].wingFrame === 0 ? 1 : 0;
+                    }
+                    if (dino.x + 4 < obstacles[i].x + obstacles[i].w &&
+                        dino.x + dino.w - 4 > obstacles[i].x &&
+                        dino.y + 4 < obstacles[i].y + obstacles[i].h &&
+                        dino.y + dino.h - 4 > obstacles[i].y) {
+                        gameOver = true;
+                    }
+                    if (obstacles[i].x < -50) obstacles.splice(i, 1);
+                }
+            }
+
+            function draw() {
+                ctx.fillStyle = isNight ? '#111827' : '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.strokeStyle = isNight ? '#ffffff' : '#000000';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(0, 308);
+                ctx.lineTo(800, 308);
+                ctx.stroke();
+
+                const color = isNight ? '#facc15' : '#222222';
+                ctx.fillStyle = color;
+                ctx.fillRect(dino.x + 14, dino.y, 18, 16);
+                ctx.fillRect(dino.x + 24, dino.y + 6, 8, 8);
+                ctx.fillStyle = isNight ? '#000' : '#fff';
+                ctx.fillRect(dino.x + 24, dino.y + 3, 3, 3);
+                ctx.fillStyle = color;
+                ctx.fillRect(dino.x + 8, dino.y + 16, 16, 18);
+                ctx.fillRect(dino.x, dino.y + 18, 10, 8);
+                ctx.fillRect(dino.x + 22, dino.y + 18, 5, 4);
+                if (dino.grounded) {
+                    if (dino.legAnim === 0) {
+                        ctx.fillRect(dino.x + 10, dino.y + 34, 4, 10);
+                        ctx.fillRect(dino.x + 18, dino.y + 34, 4, 6);
+                    } else {
+                        ctx.fillRect(dino.x + 10, dino.y + 34, 4, 6);
+                        ctx.fillRect(dino.x + 18, dino.y + 34, 4, 10);
+                    }
+                } else {
+                    ctx.fillRect(dino.x + 10, dino.y + 34, 4, 8);
+                    ctx.fillRect(dino.x + 18, dino.y + 34, 4, 8);
+                }
+
+                obstacles.forEach(obs => {
+                    if (obs.type === 'cactus') {
+                        ctx.fillStyle = isNight ? '#22c55e' : '#166534';
+                        for (let c = 0; c < obs.count; c++) {
+                            ctx.fillRect(obs.x + (c * 15), obs.y - 5, 12, 38);
+                            ctx.fillRect(obs.x + (c * 15) - 3, obs.y + 10, 4, 10);
+                            ctx.fillRect(obs.x + (c * 15) + 11, obs.y + 5, 4, 10);
+                        }
+                    } else {
+                        ctx.fillStyle = isNight ? '#ec4899' : '#b91c1c';
+                        ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+                        ctx.fillRect(obs.x + 8, obs.wingFrame === 0 ? obs.y - 8 : obs.y + 18, 14, 8);
+                    }
+                });
+
+                if (gameOver) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '16px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('OYUN BİTTİ - Yeniden Başlamak İçin Tıkla', canvas.width/2, canvas.height/2);
+                }
+            }
+
+            function loop() {
+                if (currentGame !== 'dino') return;
+                update();
+                draw();
+                animationFrameId = requestAnimationFrame(loop);
+            }
+            loop();
+        }
+
+        // ==================== GAME 2: CLOUD ====================
+        function initCloudGame() {
+            let cloud = { x: 100, y: 150, w: 45, h: 30, vy: 0, gravity: 0.15, lift: -4 };
+            let obstacles = [];
+            let frameCount = 0;
+            let startTimer = 180;
+            let gameOver = false;
+
+            document.getElementById('mobile-instructions').innerText = "Kontroller: Yukarı süzülmek için [Boşluk] veya Ekrana Tıkla.";
+
+            function handleKeyDown(e) {
+                if ((e.code === 'Space' || e.code === 'ArrowUp') && !gameOver) {
+                    cloud.vy = cloud.lift;
+                }
+                if (gameOver && e.code === 'Space') initCloudGame();
+            }
+            window.onkeydown = handleKeyDown;
+            canvas.onclick = () => {
+                if (!gameOver) cloud.vy = cloud.lift;
+                if (gameOver) initCloudGame();
+            };
+
+            function update() {
+                if (gameOver) return;
+                frameCount++;
+                score = Math.floor(frameCount / 10);
+                document.getElementById('current-score').innerText = score;
+                if (score > highScore.cloud) { highScore.cloud = score; document.getElementById('high-score').innerText = score; }
+
+                if (startTimer > 0) {
+                    startTimer--;
+                    cloud.y = 150 + Math.sin(frameCount / 10) * 10;
+                    cloud.vy = 0;
+                } else {
+                    cloud.vy += cloud.gravity;
+                    cloud.y += cloud.vy;
+                }
+
+                // Lenient ceiling boundary: dies only if more than half goes above top border (y < -15)
+                if (cloud.y < -15 || cloud.y > 330) gameOver = true;
+
+                if (frameCount % 140 === 0 && startTimer <= 0) {
+                    let types = ['bird', 'lightning', 'parrot'];
+                    let chosen = types[Math.floor(Math.random() * types.length)];
+                    obstacles.push({ x: 800, y: Math.random() * 240 + 30, w: 32, h: 28, type: chosen });
+                }
+
+                for (let i = obstacles.length - 1; i >= 0; i--) {
+                    obstacles[i].x -= 1.8;
+                    if (
+                        cloud.x < obstacles[i].x + obstacles[i].w &&
+                        cloud.x + cloud.w > obstacles[i].x &&
+                        cloud.y < obstacles[i].y + obstacles[i].h &&
+                        cloud.y + cloud.h > obstacles[i].y
+                    ) {
+                        gameOver = true;
+                    }
+                    if (obstacles[i].x < -50) obstacles.splice(i, 1);
+                }
+            }
+
+            function draw() {
+                ctx.fillStyle = '#0f172a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = '#e2e8f0';
+                ctx.beginPath();
+                ctx.arc(cloud.x + 15, cloud.y + 15, 15, 0, Math.PI * 2);
+                ctx.arc(cloud.x + 30, cloud.y + 18, 12, 0, Math.PI * 2);
+                ctx.arc(cloud.x + 8, cloud.y + 18, 10, 0, Math.PI * 2);
+                ctx.fill();
+
+                obstacles.forEach(obs => {
+                    if (obs.type === 'bird') ctx.fillStyle = '#38bdf8';
+                    else if (obs.type === 'lightning') ctx.fillStyle = '#facc15';
+                    else ctx.fillStyle = '#f97316';
+                    ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+                });
+
+                if (startTimer > 0) {
+                    ctx.fillStyle = '#facc15';
+                    ctx.font = '14px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('HAVADA BEKLENİYOR: ' + Math.ceil(startTimer / 60), canvas.width/2, 40);
+                }
+
+                if (gameOver) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.85)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '16px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('ÇAKILDIN! - Yeniden Başlamak İçin Tıkla', canvas.width/2, canvas.height/2);
+                }
+            }
+
+            function loop() {
+                if (currentGame !== 'cloud') return;
+                update();
+                draw();
+                animationFrameId = requestAnimationFrame(loop);
+            }
+            loop();
+        }
+
+        // ==================== GAME 3: ROCKET ====================
+        function initRocketGame() {
+            let ship = { x: 50, y: 150, w: 40, h: 22, speed: 4.5 };
+            let bullets = [];
+            let enemyBullets = [];
+            let enemies = [];
+            let keys = {};
+            let frameCount = 0;
+            let enemiesDefeated = 0;
+            let bossActive = false;
+            let boss = { x: 650, y: 130, w: 70, h: 80, hp: 35, maxHp: 35, shootTimer: 0 };
+            let gameWon = false;
+            let gameOver = false;
+
+            const controlUi = document.getElementById('game-controls-ui');
+            controlUi.innerHTML = `
+                <div class="flex flex-wrap items-center justify-center gap-2">
+                    <div class="flex gap-1.5">
+                        <button id="btn-up" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 border-2 border-black rounded arcade-btn text-xs">⬆️ YUKARI</button>
+                        <button id="btn-down" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 border-2 border-black rounded arcade-btn text-xs">⬇️ AŞAĞI</button>
+                    </div>
+                    <div class="flex gap-1.5">
+                        <button id="btn-left" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 border-2 border-black rounded arcade-btn text-xs">⬅️ SOL</button>
+                        <button id="btn-right" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 border-2 border-black rounded arcade-btn text-xs">➡️ SAĞ</button>
+                    </div>
+                    <button id="btn-fire" class="bg-red-600 hover:bg-red-500 text-white px-5 py-1.5 border-2 border-black rounded arcade-btn text-xs font-bold">🔥 ATEŞ</button>
+                </div>
+            `;
+
+            const bindBtn = (id, code) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.onmousedown = () => { keys[code] = true; if(code === 'Space') fireBullet(); };
+                el.onmouseup = () => { keys[code] = false; };
+                el.ontouchstart = (e) => { e.preventDefault(); keys[code] = true; if(code === 'Space') fireBullet(); };
+                el.ontouchend = (e) => { e.preventDefault(); keys[code] = false; };
+            };
+            bindBtn('btn-up', 'ArrowUp');
+            bindBtn('btn-down', 'ArrowDown');
+            bindBtn('btn-left', 'ArrowLeft');
+            bindBtn('btn-right', 'ArrowRight');
+            bindBtn('btn-fire', 'Space');
+
+            window.onkeydown = (e) => { 
+                keys[e.code] = true; 
+                if (e.code === 'Space') { e.preventDefault(); fireBullet(); } 
+            };
+            window.onkeyup = (e) => { keys[e.code] = false; };
+
+            // Click canvas to restart if game over or won
+            canvas.onclick = () => {
+                if (gameOver || gameWon) initRocketGame();
+            };
+
+            function fireBullet() {
+                if (gameOver || gameWon) {
+                    initRocketGame();
+                    return;
+                }
+                if (bullets.length < 12) {
+                    // 3-bullet spread shot capability
+                    bullets.push({ x: ship.x + ship.w, y: ship.y + ship.h / 2 - 2, vy: 0 });
+                    bullets.push({ x: ship.x + ship.w, y: ship.y + ship.h / 2 - 2, vy: -1.5 });
+                    bullets.push({ x: ship.x + ship.w, y: ship.y + ship.h / 2 - 2, vy: 1.5 });
+                }
+            }
+
+            // Wave 1: 35 enemies spaced out with ~5 seconds fire rate & slow movement
+            for (let i = 0; i < 35; i++) {
+                enemies.push({
+                    x: 900 + i * 260,
+                    y: ((i * 75) % 240 + 30),
+                    w: 30,
+                    h: 30,
+                    alive: true,
+                    lastShot: Math.random() * 250
+                });
+            }
+
+            function update() {
+                if (gameOver || gameWon) return;
+                frameCount++;
+
+                if ((keys['ArrowUp'] || keys['KeyW']) && ship.y > 10) ship.y -= ship.speed;
+                if ((keys['ArrowDown'] || keys['KeyS']) && ship.y < 320) ship.y += ship.speed;
+                if ((keys['ArrowLeft'] || keys['KeyA']) && ship.x > 10) ship.x -= ship.speed;
+                if ((keys['ArrowRight'] || keys['KeyD']) && ship.x < 450) ship.x += ship.speed;
+
+                // Player bullets update & Bullet Clashing mechanism
+                for (let i = bullets.length - 1; i >= 0; i--) {
+                    bullets[i].x += 7;
+                    bullets[i].y += bullets[i].vy;
+
+                    let bulletDestroyed = false;
+                    for (let j = enemyBullets.length - 1; j >= 0; j--) {
+                        let eb = enemyBullets[j];
+                        if (
+                            bullets[i] &&
+                            bullets[i].x < eb.x + eb.w && bullets[i].x + 10 > eb.x &&
+                            bullets[i].y < eb.y + eb.h && bullets[i].y + 4 > eb.y
+                        ) {
+                            enemyBullets.splice(j, 1);
+                            bulletDestroyed = true;
+                            break;
+                        }
+                    }
+
+                    if (bulletDestroyed) {
+                        bullets.splice(i, 1);
+                        continue;
+                    }
+
+                    if (bullets[i] && bullets[i].x > 800) bullets.splice(i, 1);
+                }
+
+                // Enemy bullets update
+                for (let i = enemyBullets.length - 1; i >= 0; i--) {
+                    enemyBullets[i].x -= 2.8;
+                    if (
+                        ship.x < enemyBullets[i].x + enemyBullets[i].w &&
+                        ship.x + ship.w > enemyBullets[i].x &&
+                        ship.y < enemyBullets[i].y + enemyBullets[i].h &&
+                        ship.y + ship.h > enemyBullets[i].y
+                    ) {
+                        gameOver = true;
+                    }
+                    if (enemyBullets[i].x < 0) enemyBullets.splice(i, 1);
+                }
+
+                if (!bossActive) {
+                    let allCleared = true;
+                    enemies.forEach(en => {
+                        if (!en.alive) return;
+                        allCleared = false;
+                        en.x -= 0.6; // Slow movement
+
+                        en.lastShot++;
+                        if (en.lastShot > 300) { // Firing every ~5 seconds
+                            en.lastShot = 0;
+                            enemyBullets.push({ x: en.x, y: en.y + 10, w: 10, h: 10 });
+                        }
+
+                        bullets.forEach((b, bi) => {
+                            if (
+                                b.x < en.x + en.w && b.x + 10 > en.x &&
+                                b.y < en.y + en.h && b.y + 6 > en.y
+                            ) {
+                                en.alive = false;
+                                enemiesDefeated++;
+                                score += 100;
+                                bullets.splice(bi, 1);
+                            }
+                        });
+                    });
+
+                    if (allCleared || enemiesDefeated >= 35) {
+                        bossActive = true;
+                    }
+                } else {
+                    boss.shootTimer++;
+                    if (boss.shootTimer >= 180) { // Boss fires 2 bullets every 3 seconds
+                        boss.shootTimer = 0;
+                        enemyBullets.push({ x: boss.x, y: boss.y + 15, w: 12, h: 12 });
+                        enemyBullets.push({ x: boss.x, y: boss.y + 55, w: 12, h: 12 });
+                    }
+
+                    bullets.forEach((b, bi) => {
+                        if (
+                            b.x < boss.x + boss.w && b.x + 10 > boss.x &&
+                            b.y < boss.y + boss.h && b.y + 6 > boss.y
+                        ) {
+                            boss.hp--;
+                            bullets.splice(bi, 1);
+                            if (boss.hp <= 0) {
+                                gameWon = true;
+                                score += 1000;
+                            }
+                        }
+                    });
+                }
+
+                document.getElementById('current-score').innerText = score;
+                if (score > highScore.rocket) { highScore.rocket = score; document.getElementById('high-score').innerText = score; }
+            }
+
+            function draw() {
+                ctx.fillStyle = '#030712';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = '#ef4444';
+                ctx.fillRect(ship.x, ship.y + 6, ship.w - 10, 10);
+                ctx.fillStyle = '#38bdf8';
+                ctx.fillRect(ship.x + 15, ship.y + 8, 12, 6);
+                ctx.fillStyle = '#facc15';
+                ctx.fillRect(ship.x + ship.w - 10, ship.y + 4, 10, 14);
+                ctx.fillStyle = '#f97316';
+                ctx.fillRect(ship.x - 6, ship.y + 8, 8, 6);
+
+                ctx.fillStyle = '#38bdf8';
+                bullets.forEach(b => ctx.fillRect(b.x, b.y, 10, 4));
+
+                ctx.fillStyle = '#f87171';
+                enemyBullets.forEach(eb => ctx.fillRect(eb.x, eb.y, eb.w, eb.h));
+
+                if (!bossActive) {
+                    enemies.forEach(en => {
+                        if (en.alive) {
+                            ctx.fillStyle = '#a855f7';
+                            ctx.fillRect(en.x, en.y, en.w, en.h);
+                            ctx.fillStyle = '#facc15';
+                            ctx.fillRect(en.x + 4, en.y + 10, 8, 8);
+                        }
+                    });
+                } else if (!gameWon) {
+                    ctx.fillStyle = '#dc2626';
+                    ctx.fillRect(boss.x, boss.y, boss.w, boss.h);
+                    ctx.fillStyle = '#facc15';
+                    ctx.fillRect(boss.x + 10, boss.y + 30, 18, 20);
+                    ctx.fillStyle = '#333';
+                    ctx.fillRect(boss.x, boss.y - 15, boss.w, 8);
+                    ctx.fillStyle = '#22c55e';
+                    ctx.fillRect(boss.x, boss.y - 15, (boss.hp / boss.maxHp) * boss.w, 8);
+                }
+
+                if (gameOver) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.85)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.fillStyle = '#f87171';
+                    ctx.font = '16px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('GEMİ YOK EDİLDİ!', canvas.width/2, canvas.height/2 - 15);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '11px monospace';
+                    ctx.fillText('Tekrar Oynamak İçin Tıkla', canvas.width/2, canvas.height/2 + 15);
+                }
+
+                if (gameWon) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.85)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.fillStyle = '#4ade80';
+                    ctx.font = '16px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('ZAFER! BOSS YENİLDİ!', canvas.width/2, canvas.height/2 - 15);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '11px monospace';
+                    ctx.fillText('Tekrar Oynamak İçin Tıkla', canvas.width/2, canvas.height/2 + 15);
+                }
+            }
+
+            function loop() {
+                if (currentGame !== 'rocket') return;
+                update();
+                draw();
+                animationFrameId = requestAnimationFrame(loop);
+            }
+            loop();
+        }
+    </script>
+</body>
+</html>
+```
+eof
+
+***
+
+### Güncellemeler ve Kolaylıklar:
+* **Roket Oyunu Konumu ve Kontroller:** Oyun ekranı ve kontrol butonları yukarı taşındı, mobil ve masaüstünde daha iyi görünürlük sağlandı.
+* **Yeniden Oynama / Tıkla Tekrar Başlat:** Roket oyununda oyun bittiğinde ekrana veya tuşlara tıklayarak anında yeniden başlatabilirsin.
+* **Mermi Çarpışması:** Mermilerinle düşman mermilerini vurup patlatabilirsin.
+* **Hızlı İndirme:** Üst menüdeki yeşil **"Oyunu İndir"** butonuyla tüm bu güncel kodları doğrudan tek tıklamayla cihazına kaydedebilirsin!
